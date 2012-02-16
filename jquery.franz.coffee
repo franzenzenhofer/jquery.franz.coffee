@@ -1,5 +1,7 @@
 # HTML5 jquery plugin 'franz'
 #
+# currently google chrome only!!!! (and it will probably never work on (any) IE)
+#
 # MIT license
 # by franz enzenhofer, 2012
 #
@@ -39,6 +41,7 @@ $.fn.extend
       onload_reader_callback: true
       sanitize: true
       debug: false
+      dragactionclass: 'dragover'
 
 
 
@@ -74,41 +77,97 @@ $.fn.extend
         when 'text' then reader.readAsText(file_or_blob)
         else  reader.readAsDataURL(file_or_blob)
 
+    makeImage = (file_or_blob) ->
+      what = 'dataurl'
+      #the image dataurl gets passed to a reader callback that creates an image object
+      reader_callback = (dataurl) ->
+        img = new Image()
+        img.src = dataurl
+        #only after the image is loaded, we kick it back to the first callback (default behaviour)
+        if settings.onload_reader_callback then img.onload = (event) -> callback(img) else callback(img)
+      readerhelper(file_or_blob,what,reader_callback)
+
+    makeAudio = (file_or_blob) ->
+      what = 'dataurl'
+      #the image dataurl gets passed to a reader callback that creates an image object
+      reader_callback = (dataurl) ->
+        audio = new Audio()
+        audio.src = dataurl
+        audio.setAttribute('controls','controls')
+        audio.setAttribute('autoplay','autoplay')
+        audio.setAttribute('type',file_or_blob.type) if file_or_blob.type
+        #only after the image is loaded, we kick it back to the first callback (default behaviour)
+        if settings.onload_reader_callback then audio.onload = (event) -> callback(audio) else callback(audio)
+      readerhelper(file_or_blob,what,reader_callback)
+
+    makeVideo = (file_or_blob) ->
+      what = 'dataurl'
+      #the image dataurl gets passed to a reader callback that creates an image object
+      reader_callback = (dataurl) ->
+        video = document.createElement('video')
+        video.src = dataurl
+        video.setAttribute('controls','controls')
+        video.setAttribute('autoplay','autoplay')
+        video.setAttribute('type',file_or_blob.type) if file_or_blob.type
+        #only after the image is loaded, we kick it back to the first callback (default behaviour)
+        if settings.onload_reader_callback then video.onload = (event) -> callback(video) else callback(video)
+      readerhelper(file_or_blob,what,reader_callback)
+
+    #whattodo with the file based on the type
+    whatToDoWithTheFile = (file, type) ->
+      if /image\/.*/i.test(type) #it's an image
+        makeImage(file)
+      else if /audio\/.*/i.test(type) #it's an audio
+        makeAudio(file)
+      else if /video\/.*/i.test(type) #it's an audio
+        makeVideo(file)
+
+
     # _Insert magic here._
     return @each ()->
       dlog "one iteration of the main jquery loop"
       dlog @
 
+      #DROP
+      #adds class during drag action
+      @ondragover = ->
+        droparea.className += " "+settings.dragactionclass
+        false
+
+      #removes class 'dragover' after the drag actions ends
+      @ondragend = ->
+        droparea.className = droparea.className.replace( new RegExp("(?:^|\s)"+settings.dragactionclass+"(?!\S)", "i"); /dragover/ , '' )
+        false
+
+      @ondrop = (e) ->
+        e.stopPropagation()
+        e.preventDefault()
+        #dlog(e)
+        #dlog(e.dataTransfer)
+        #dlog(e.dataTransfer.items)
+        #dlog(e.dataTransfer.files)
+        #dlog(e.dataTransfer.files[0])
+        #dlog(e.dataTransfer.items[0])
+        #dlog(e.dataTransfer.items[0].getAsFile())
+        for file in e.dataTransfer.files
+          do (file) ->
+            dlog('in the drop file loop')
+            dlog(file)
+            whatToDoWithTheFile(file,file.type)
+
+        false
+        #readerhelper(e.dataTransfer.files[0], what, callback)
+
+      #PASTE
       #attach paste event handler
       @onpaste = (e) ->
+        dlog e.clipboardData.items
         for item in e.clipboardData.items
           do (item) ->
             dlog item
             dlog JSON.stringify(item)
-
             if item.kind is 'file' #it's a file
-              dlog(/image\/.*/i.test(item.type))
-              if /image\/.*/i.test(item.type) #it's an image
-                #we transform the file to an dataurl
-                what = 'dataurl'
-                file_or_blob = item.getAsFile()
-                dlog(file_or_blob)
-                #the image dataurl gets passed to a reader callback that creates an image object
-                reader_callback = (dataurl) ->
-                  dlog('in image create reader_callback')
-                  img = new Image()
-                  img.src = dataurl
-                  dlog(img)
-                  #only after the image is loaded, we kick it back to the first callback
-                  if settings.onload_reader_callback then img.onload = (event) -> callback(img) else callback(img)
-
-            #after the if branches were set, we
-            dlog(what)
-            dlog(reader_callback)
-            dlog(file_or_blob)
-            readerhelper(file_or_blob,what,reader_callback) if (what and reader_callback)
-
-      #attach drop event handler
+              whatToDoWithTheFile(item.getAsFile(),item.type)
 
       #if its a file select attach fileselect event handler
 
