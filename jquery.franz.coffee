@@ -43,7 +43,7 @@ $.fn.extend
       image_mime: ['image/gif', 'image/jpeg', 'image/pjpeg', 'image/png' , 'image/svg+xml' , 'image/tiff' , 'image/vnd.microsoft.icon']
       audio_mime: ['audio/mpeg', 'audio/ogg', 'audio/webm', 'audio/vnd.wave', 'audio/wav', 'audio/wave', 'audio/x-wav', 'audio/x-pn-wav',  'audio/vorbis', 'audio/mp4']
       video_mime: ['video/ogg', 'video/webm', 'video/mp4']
-      text_mime: true
+      text_mime: ['text/plain', 'text/html']
       onload_reader_callback: true #calls callback only after the onload event of an element
       sanitize: true #saniztes HTML in some cases #not yet implemented
       debug: false #debug flag
@@ -51,6 +51,7 @@ $.fn.extend
       errorcallback: (error) -> console.log(error.toString()); return error #errorcallback, nuff said
       maxfilesize: (20*1000*1024) #max file size of a single file
       textwrapper: 'div' #htmlelement in which the text of an transferaction will be wrapped
+      no_html_in_text: true
       strings:
         maxfilesizeerror: 'File is too big!'
         mediatypenotsuppported: 'This media type is not supported!'
@@ -131,16 +132,32 @@ $.fn.extend
         if settings.onload_reader_callback then video.onload = (event) -> callback(video) else callback(video)
       readerhelper(file_or_blob,what,reader_callback)
 
-    makeText = (file_or_blob) ->
+    makeText = (file_or_blob_or_string) ->
+      dlog 'in MAKETEXT'
       what = 'text'
       reader_callback = (text) ->
+        dlog 'IN READER CALLBACK'
         dlog text
+        #default - we don't want HTML in text
+        if(settings.no_html_in_text is true)
+          text = text.replace(/<(?:.|\n)*?>/gm, '')
+          dlog ('WE stripped some tags')
+          dlog text
+        #default - we wrap the text in an HTML element
         if(settings.textwrapper and settings.textwrapper isnt '')
+          dlog 'we wrap an HTML element around it'
+          dlog text
           elem = document.createElement(settings.textwrapper)
           elem.innerText = text
           text = elem
+          dlog text
+        #there is no ONLOAD event on an common HTML element, so we call the callback directly
         callback(text)
-      readerhelper(file_or_blob,what,reader_callback)
+
+      if (typeof file_or_blob_or_string is 'string')
+        reader_callback(file_or_blob_or_string)
+      else
+        readerhelper(file_or_blob_or_string,what,reader_callback)
 
     #whattodo with the file based on the type
     whatToDoWithTheFile = (file, type) ->
@@ -151,28 +168,28 @@ $.fn.extend
       if (file.size is undefined) or (file.size <= settings.maxfilesize)
         if /image\/.*/i.test(type) #it's an image
           if settings.image
-            if(settings.image_mime == true) or (settings.image_mime?.indexOf(type))
+            if(settings.image_mime == true) or (settings.image_mime?.indexOf(type) isnt -1)
               makeImage(file)
             else err(new Error(settings.string.mimetypenotsupported))
           else err(new Error(settings.strings.mediatypenotsuppported))
         else if /audio\/.*/i.test(type) #it's an audio
           if settings.audio
-            if(settings.audio_mime == true) or (settings.audio_mime?.indexOf(type))
+            if(settings.audio_mime == true) or (settings.audio_mime?.indexOf(type) isnt -1)
               makeAudio(file)
-            else err(new Error(settings.string.mimetypenotsupported))
+            else err(new Error(settings.strings.mimetypenotsupported))
           else err(new Error(settings.strings.mediatypenotsuppported))
           #if settings.audio then makeAudio(file) else err(new Error(settings.strings.mediatypenotsuppported))
         else if /video\/.*/i.test(type) #it's an audio
-           if settings.video
-            if(settings.video_mime == true) or (settings.video_mime?.indexOf(type))
+          if settings.video
+            if(settings.video_mime == true) or (settings.video_mime?.indexOf(type) isnt -1)
               makeVideo(file)
-            else err(new Error(settings.string.mimetypenotsupported))
+            else err(new Error(settings.strings.mimetypenotsupported))
           else err(new Error(settings.strings.mediatypenotsuppported))
         else if /text\/.*/i.test(type) #it's a text file
-           if settings.text
-            if(settings.text_mime == true) or (settings.text_mime?.indexOf(type))
+          if settings.text
+            if(settings.text_mime is true) or (settings.text_mime?.indexOf(type) isnt -1)
               makeText(file)
-            else err(new Error(settings.string.mimetypenotsupported))
+            else err(new Error(settings.strings.mimetypenotsupported))
           else err(new Error(settings.strings.mediatypenotsuppported))
       else
         err(new Error(settings.strings.maxfilesizeerror))
@@ -206,6 +223,11 @@ $.fn.extend
 
       #PASTE
       @onpaste = (e) ->
+        dlog 'PASTE EVENT GOT FIRED'
+        e.stopPropagation() #event gets handled only one time
+        dlog 'IN PASTE'
+        dlog e
+        dlog e.clipboardData
         dlog e.clipboardData.items
 
         whatToDoWithTheItem = (item) ->
@@ -213,11 +235,34 @@ $.fn.extend
           dlog(item)
           if item.kind is 'file' #it's a file
             whatToDoWithTheFile(item.getAsFile(),item.type)
-          else
-            err(new Error(settings.strings.notransferkind))
+          else if item.kind is 'string'
+            #ok, now we have an issue
+            #as this method has a high chance of throwing two similar events, one time with text/plain one time with text/html
+            dlog item.kind
+            dlog item.type
+            raw = e.clipboardData?.getData(item.type) #get the raw data
+            dlog(typeof raw)
+            if typeof raw is 'string'
+                #makeText(raw)
+                #we fake a file as we need to check it with all the settings
+                whatToDoWithTheFile(raw,item.type)
+            else #we don't know what it is
+              err(new Error(settings.strings.notransferkind))
 
         if(settings.multiple)
-          for item in e.clipboardData.items
+          dlog ('e.clipboardData.items.length ->' + e.clipboardData.items.length)
+          items = e.clipboardData.items
+          #stupid workaround to prevent throwing two times a text event with text/html and text/plain
+          if items.length is 2 and items[0].kind is 'string' and items[1].kind is 'string'
+            dlog ('SUPER SPECIAL LOGIC AGAINST DUPLICATE TEXT/PLAIN TEXT/HTML ITEMS')
+            #we get rid off all unsuported ones
+            if settings.text_mime
+              items = (item for item in items when (settings.text_mime.indexOf(item.type) isnt -1) )
+             if items.length is 2
+              #we kill the one with less information, which is the plain text one
+              if items[0] is 'text/plain' then items = [items[1]] else  items = [items[0]]
+
+          for item in items
             do (item) -> whatToDoWithTheItem(item)
         else
           whatToDoWithTheItem(e.clipboardData.items[0])
@@ -225,6 +270,7 @@ $.fn.extend
       #if its a file select attach fileselect event handler
       if $(@).is("input") and $(@).attr('type') is 'file'
         @onchange = (e) ->
+          e.stopPropagation()
           dlog('onchange in input type file')
           dlog(e)
           if(e?.target?.files)
