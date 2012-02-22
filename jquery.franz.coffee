@@ -21,6 +21,7 @@
 #
 # jquery is a ghetto, but it solves the problem at hand (making inbrowser  drag&drop, copy&paste, fileselect as simple as possible)
 
+##TODO: strings via copy&paste (or drop if possible), support mime/time restrictions, default common internet mime types
 #making sure $ is the jquery object
 # Reference jQuery
 $ = jQuery
@@ -39,6 +40,10 @@ $.fn.extend
       audio: true #support audio
       video: true #support video
       text: true #suppor text
+      image_mime: ['image/gif', 'image/jpeg', 'image/pjpeg', 'image/png' , 'image/svg+xml' , 'image/tiff' , 'image/vnd.microsoft.icon']
+      audio_mime: ['audio/mpeg', 'audio/ogg', 'audio/webm', 'audio/vnd.wave', 'audio/wav', 'audio/wave', 'audio/x-wav', 'audio/x-pn-wav',  'audio/vorbis', 'audio/mp4']
+      video_mime: ['video/ogg', 'video/webm', 'video/mp4']
+      text_mime: true
       onload_reader_callback: true #calls callback only after the onload event of an element
       sanitize: true #saniztes HTML in some cases #not yet implemented
       debug: false #debug flag
@@ -51,6 +56,7 @@ $.fn.extend
         mediatypenotsuppported: 'This media type is not supported!'
         nofiletype: "Don't know this type of file!"
         notransferkind: "Don't know what to do with this (kind of DataTransferItem)!"
+        mimetypenotsupported: "The MIME-Type of the file is not supported :("
 
 
     #shortcuts
@@ -87,6 +93,7 @@ $.fn.extend
         when 'binarystring' then reader.readAsBinaryString(file_or_blob)
         when 'text' then reader.readAsText(file_or_blob)
         else  reader.readAsDataURL(file_or_blob)
+      #return true #awesome coffescript optimization with return in switch statements
 
     makeImage = (file_or_blob) ->
       what = 'dataurl'
@@ -143,13 +150,30 @@ $.fn.extend
 
       if (file.size is undefined) or (file.size <= settings.maxfilesize)
         if /image\/.*/i.test(type) #it's an image
-          if settings.image then  makeImage(file) else err(new Error(settings.strings.mediatypenotsuppported))
+          if settings.image
+            if(settings.image_mime == true) or (settings.image_mime?.indexOf(type))
+              makeImage(file)
+            else err(new Error(settings.string.mimetypenotsupported))
+          else err(new Error(settings.strings.mediatypenotsuppported))
         else if /audio\/.*/i.test(type) #it's an audio
-          if settings.audio then makeAudio(file) else err(new Error(settings.strings.mediatypenotsuppported))
+          if settings.audio
+            if(settings.audio_mime == true) or (settings.audio_mime?.indexOf(type))
+              makeAudio(file)
+            else err(new Error(settings.string.mimetypenotsupported))
+          else err(new Error(settings.strings.mediatypenotsuppported))
+          #if settings.audio then makeAudio(file) else err(new Error(settings.strings.mediatypenotsuppported))
         else if /video\/.*/i.test(type) #it's an audio
-          if settings.video then makeVideo(file) else err(new Error(settings.strings.mediatypenotsuppported))
+           if settings.video
+            if(settings.video_mime == true) or (settings.video_mime?.indexOf(type))
+              makeVideo(file)
+            else err(new Error(settings.string.mimetypenotsupported))
+          else err(new Error(settings.strings.mediatypenotsuppported))
         else if /text\/.*/i.test(type) #it's a text file
-          if settings.text then makeText(file) else err(new Error(settings.strings.mediatypenotsuppported))
+           if settings.text
+            if(settings.text_mime == true) or (settings.text_mime?.indexOf(type))
+              makeText(file)
+            else err(new Error(settings.string.mimetypenotsupported))
+          else err(new Error(settings.strings.mediatypenotsuppported))
       else
         err(new Error(settings.strings.maxfilesizeerror))
 

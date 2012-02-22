@@ -13,6 +13,7 @@
         audio: true,
         video: true,
         text: true,
+        image_mime: ['image/gif', 'image/jpeg', 'image/pjpeg', 'image/png', 'image/svg+xml', 'image/tiff', 'image/vnd.microsoft.icon'],
         onload_reader_callback: true,
         sanitize: true,
         debug: false,
@@ -27,7 +28,8 @@
           maxfilesizeerror: 'File is too big!',
           mediatypenotsuppported: 'This media type is not supported!',
           nofiletype: "Don't know this type of file!",
-          notransferkind: "Don't know what to do with this (kind of DataTransferItem)!"
+          notransferkind: "Don't know what to do with this (kind of DataTransferItem)!",
+          mimetypenotsupported: "The MIME-Type of the file is not supported :("
         }
       };
       err = settings.errorcallback;
@@ -145,6 +147,7 @@
         return readerhelper(file_or_blob, what, reader_callback);
       };
       whatToDoWithTheFile = function(file, type) {
+        var _ref2;
         dlog(file);
         dlog(type);
         if (!type) {
@@ -154,7 +157,11 @@
         if ((file.size === void 0) || (file.size <= settings.maxfilesize)) {
           if (/image\/.*/i.test(type)) {
             if (settings.image) {
-              return makeImage(file);
+              if ((settings.image_mime === true) || ((_ref2 = settings.image_mime) != null ? _ref2.indexOf(type) : void 0)) {
+                return makeImage(file);
+              } else {
+                return err(new Error(settings.string.mimetypenotsupported));
+              }
             } else {
               return err(new Error(settings.strings.mediatypenotsuppported));
             }
