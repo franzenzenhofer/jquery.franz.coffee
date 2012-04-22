@@ -9,6 +9,7 @@
 #  * drag & drop
 #  * copy&paste
 # * fileselect
+# * text copy&paste
 #
 # file transfer usaable
 #
@@ -21,7 +22,6 @@
 #
 # jquery is a ghetto, but it solves the problem at hand (making inbrowser  drag&drop, copy&paste, fileselect as simple as possible)
 
-##TODO: strings via copy&paste (or drop if possible), support mime/time restrictions, default common internet mime types
 #making sure $ is the jquery object
 # Reference jQuery
 $ = jQuery
@@ -40,13 +40,14 @@ $.fn.extend
       audio: true #support audio
       video: true #support video
       text: true #suppor text
-      image_mime: ['image/gif', 'image/jpeg', 'image/pjpeg', 'image/png' , 'image/svg+xml' , 'image/tiff' , 'image/vnd.microsoft.icon']
+      image_mime: ['image/gif', 'image/jpeg', 'image/pjpeg', 'image/png' , 'image/svg+xml' , 'image/tiff' , 'image/vnd.microsoft.icon', 'image/webp'] #'image/webp' does not seem to work?
       audio_mime: ['audio/mpeg', 'audio/ogg', 'audio/webm', 'audio/vnd.wave', 'audio/wav', 'audio/wave', 'audio/x-wav', 'audio/x-pn-wav',  'audio/vorbis', 'audio/mp4']
       video_mime: ['video/ogg', 'video/webm', 'video/mp4']
       text_mime: ['text/plain', 'text/html']
       onload_reader_callback: true #calls callback only after the onload event of an element
       sanitize: true #saniztes HTML in some cases #not yet implemented
       debug: false #debug flag
+      dragactionclasstarget: 'self' #set the target of the dragactionclass, can be any kind of jquery identifyer string "self" uses @
       dragactionclass: 'dragover' #class name which will be set to the droparea on dropstart / set false if behaviour is not desired
       errorcallback: (error) -> console.log(error.toString()); return error #errorcallback, nuff said
       maxfilesize: (20*1000*1024) #max file size of a single file
@@ -202,17 +203,21 @@ $.fn.extend
       dlog @
 
       #DROP
+      if (settings.dragactionclasstarget is 'self')
+        dragactionclasstarget_element = @
+      else
+        dragactionclasstarget_element = settings.dragactionclasstarget
 
       #some drag]drop overhead, also we sett set dragover class
-      @ondragstart = -> dlog('dragstart'); $(@).addClass(settings.dragactionclass); return false #addclass
-      @ondragover = -> dlog('dragover');  $(@).addClass(settings.dragactionclass); return false #addclass
-      @ondragend = -> dlog('dragend'); $(@).removeClass(settings.dragactionclass); return false #removeclass
-      @ondragleave = -> dlog('dragleave'); $(@).removeClass(settings.dragactionclass); return false # removeclass
+      @ondragstart = -> dlog('dragstart'); $(dragactionclasstarget_element).addClass(settings.dragactionclass); return false #addclass
+      @ondragover = -> dlog('dragover');  $(dragactionclasstarget_element).addClass(settings.dragactionclass); return false #addclass
+      @ondragend = -> dlog('dragend'); $('.'+settings.dragactionclass).removeClass(settings.dragactionclass); return false #removeclass
+      @ondragleave = -> dlog('dragleave'); $('.'+settings.dragactionclass).removeClass(settings.dragactionclass); return false # removeclass
 
       @ondrop = (e) ->
         e.stopPropagation()
         e.preventDefault()
-        $(@).removeClass(settings.dragactionclass) #removeclass
+        $('.'+settings.dragactionclass).removeClass(settings.dragactionclass) #removeclass
         if(settings.multiple)
           for file in e.dataTransfer.files
             do (file) -> whatToDoWithTheFile(file,file.type)
